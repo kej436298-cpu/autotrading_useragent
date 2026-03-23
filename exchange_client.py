@@ -317,10 +317,8 @@ class AgentExchangeClient:
             rounded_price = self.round_price(symbol, price)
             ccxt_symbol = self._to_ccxt_symbol(symbol)
             if self.exchange_id == "bitget":
-                # 단방향 모드 TP: place-order는 reduceOnly를 지원하지 않으므로 native plan API 호출
-                # profit_plan을 통해 reduceOnly 주문을 대체함 (size 지정)
+                # 단방향 모드 TP: holdSide 대신 side를 사용하며 planType은 profit_plan 고정
                 import time
-                hold_side = "long" if side.lower() == "sell" else "short"
                 resp = await self.exchange.private_mix_post_v2_mix_order_place_tpsl_order({
                     "symbol": symbol,
                     "productType": "USDT-FUTURES",
@@ -331,7 +329,7 @@ class AgentExchangeClient:
                     "triggerType": "fill_price",
                     "executePrice": str(rounded_price),
                     "size": str(rounded_qty),
-                    "holdSide": hold_side,
+                    "side": side.lower(),
                     "delegateType": "limit",
                 })
                 order_id = resp.get("data", {}).get("orderId", f"bitget_tp_{int(time.time())}")
@@ -380,17 +378,17 @@ class AgentExchangeClient:
                 if not position:
                     logger.warning(f"No position found to set SL for {symbol}")
                     return False
-                hold_side = "long" if position.side == "LONG" else "short"
+                close_side = "sell" if position.side == "LONG" else "buy"
                 await self.exchange.private_mix_post_v2_mix_order_place_tpsl_order({
                     "symbol": symbol,
                     "productType": "USDT-FUTURES",
                     "marginMode": "crossed",
                     "marginCoin": "USDT",
-                    "planType": "pos_loss",
+                    "planType": "loss_plan",
                     "triggerPrice": str(rounded_sl),
                     "triggerType": "fill_price",
                     "size": str(position.qty),
-                    "holdSide": hold_side,
+                    "side": close_side,
                     "delegateType": "market",
                 })
             else:
